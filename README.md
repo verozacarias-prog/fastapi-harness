@@ -112,7 +112,8 @@ que usar, dónde se guarda la descripción de un pull request o qué invariantes
   `claude plugin update fastapi-harness@fastapi-harness`.
 - El código y los comentarios van en inglés; los mensajes, los comandos, el agente y la
   documentación, en español.
-- Sin nombres de proyectos ni de personas fuera de `propuestas/`, que es el registro.
+- Sin nombres de proyectos ni de personas fuera de `propuestas/`, que es el registro. La
+  autora figura solo donde se declara la autoría: `LICENSE` y el `author` de `plugin.json`.
 
 ## Los tests
 

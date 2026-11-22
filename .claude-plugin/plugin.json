@@ -1,5 +1,9 @@
 {
   "name": "fastapi-harness",
   "version": "0.1.0",
-  "description": "Hooks, comandos y un agente revisor para trabajar con Claude Code en proyectos Python y FastAPI con tests primero y especificación en docs/."
+  "description": "Hooks, comandos y un agente revisor para trabajar con Claude Code en proyectos Python y FastAPI con tests primero y especificación en docs/.",
+  "author": {
+    "name": "Verónica Zacarías"
+  },
+  "license": "MIT"
 }
