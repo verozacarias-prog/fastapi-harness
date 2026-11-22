@@ -95,11 +95,16 @@ if [[ -f "$AGENT" ]]; then
 fi
 
 # ── Nothing of one project or one person ─────────────────────────────────────
-# propuestas/ is the record and keeps where each piece came from.
+# propuestas/ is the record and keeps where each piece came from. The author is
+# named only where authorship is declared: LICENSE and the author of plugin.json.
 
-LEAKS=$(grep -rIilE 'platita|ai4devs|zacarias|vzacarias|permitir_rojo|/Users/' "$ROOT" \
-  --exclude-dir=.git --exclude-dir=propuestas --exclude=test_plugin.sh 2>/dev/null | sed "s|$ROOT/||")
+LEAKS_PATTERN='platita|ai4devs|zacar[ií]as|vzacarias|permitir_rojo|/Users/'
+LEAKS=$(grep -rIilE "$LEAKS_PATTERN" "$ROOT" \
+  --exclude-dir=.git --exclude-dir=propuestas --exclude=test_plugin.sh \
+  --exclude=LICENSE --exclude=plugin.json 2>/dev/null | sed "s|$ROOT/||")
 expect "P-7 no project or personal names" "" "$LEAKS"
+expect "P-7 plugin.json names a person only as its author" no \
+  "$(jq 'del(.author)' "$PLUGIN" 2>/dev/null | grep -qiE "$LEAKS_PATTERN" && echo yes || echo no)"
 
 # ── The CLI validator, when it is installed ──────────────────────────────────
 
