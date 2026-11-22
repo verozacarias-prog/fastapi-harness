@@ -24,6 +24,8 @@ expect() {
 
 valid_json() { [[ -f "$1" ]] && jq -e . "$1" >/dev/null 2>&1 && echo yes || echo no; }
 json() { jq -r "$2 // empty" "$1" 2>/dev/null; }
+# json_yes <file> <jq condition> → yes when the condition holds, no otherwise.
+json_yes() { [[ "$(jq -r "$2" "$1" 2>/dev/null)" == true ]] && echo yes || echo no; }
 
 # frontmatter_field <file> <field> → the value of a field of its frontmatter.
 frontmatter_field() {
@@ -57,17 +59,17 @@ for hook in block-secret-reads.sh protect-tests-and-specs.sh block-dangerous-bas
     "$(grep -qF "\${CLAUDE_PLUGIN_ROOT}/hooks/$hook" "$REGISTRY" 2>/dev/null && echo yes || echo no)"
   expect "P-3 $hook exists" yes "$([[ -f "$ROOT/hooks/$hook" ]] && echo yes || echo no)"
 done
-expect "P-3 Read matcher" yes "$(json "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Read") != null')"
-expect "P-3 Bash matcher" yes "$(json "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Bash") != null')"
-expect "P-3 Edit matcher" yes "$(json "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Edit|MultiEdit|Write") != null')"
-expect "P-3 Stop hook" yes "$(json "$REGISTRY" '(.hooks.Stop | length) > 0')"
+expect "P-3 Read matcher" yes "$(json_yes "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Read") != null')"
+expect "P-3 Bash matcher" yes "$(json_yes "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Bash") != null')"
+expect "P-3 Edit matcher" yes "$(json_yes "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Edit|MultiEdit|Write") != null')"
+expect "P-3 Stop hook" yes "$(json_yes "$REGISTRY" '(.hooks.Stop | length) > 0')"
 
 # ── Default configuration ────────────────────────────────────────────────────
 
 DEFAULTS="$ROOT/config/default.json"
 expect "P-4 default.json is valid" yes "$(valid_json "$DEFAULTS")"
 for key in integration_branch secrets_allowed tests specs migrations_dirs suites bash_rules rule_refs notes_dir; do
-  expect "P-4 default.json declares $key" yes "$(json "$DEFAULTS" "has(\"$key\")")"
+  expect "P-4 default.json declares $key" yes "$(json_yes "$DEFAULTS" "has(\"$key\")")"
 done
 
 # ── Commands and agent ───────────────────────────────────────────────────────
