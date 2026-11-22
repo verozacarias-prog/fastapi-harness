@@ -106,13 +106,21 @@ que usar, dónde se guarda la descripción de un pull request o qué invariantes
 
 - **Un hook se escribe con tests primero:** los casos se proponen y se aprueban, se escriben en
   `tests/` y se commitean en rojo, y recién después se implementa.
-- **Un cambio grande** empieza como propuesta en `propuestas/NNNN-<tema>.md`.
+- **Un cambio grande** empieza como propuesta en `proposals/NNNN-<tema>.md`.
 - **Una versión nueva** sube `version` en `.claude-plugin/plugin.json` y lleva su tag. Cada
   proyecto la toma cambiando `ref` en su `settings.json` y corriendo
   `claude plugin update fastapi-harness@fastapi-harness`.
-- El código y los comentarios van en inglés; los mensajes, los comandos, el agente y la
-  documentación, en español.
-- Sin nombres de proyectos ni de personas fuera de `propuestas/`, que es el registro. La
+- **La estructura va en inglés y el contenido para personas, en español:**
+  - en inglés: las carpetas, los nombres de los archivos de código y de configuración, las
+    claves de la configuración, los nombres de los comandos y del agente, el código, los
+    comentarios y los nombres de los casos de test;
+  - en español: los nombres de los documentos (como `proposals/0002-verificador-de-arquitectura.md`),
+    el README, las propuestas, el texto de los comandos y del agente, los mensajes de los hooks
+    y los commits.
+
+  Varios nombres en inglés los exige Claude Code: `.claude-plugin/`, `commands/`, `agents/` y
+  `hooks/hooks.json`.
+- Sin nombres de proyectos ni de personas fuera de `proposals/`, que es el registro. La
   autora figura solo donde se declara la autoría: `LICENSE` y el `author` de `plugin.json`.
 
 ## Los tests
