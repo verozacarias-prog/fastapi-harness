@@ -1,0 +1,33 @@
+{
+  "integration_branch": "main",
+  "secrets_allowed": [".env.example"],
+  "tests": {
+    "dirs": ["tests/"],
+    "file_pattern": ""
+  },
+  "specs": {
+    "glob": "docs/features/*/spec.md",
+    "template_dir": "docs/features/TEMPLATE/",
+    "approval_marker": "**Aprobado por:**",
+    "pending_value": "pendiente"
+  },
+  "migrations_dirs": ["alembic/versions/", "migrations/versions/"],
+  "suites": [
+    {
+      "name": "Tests",
+      "watch": ["app", "tests"],
+      "tests_pattern": "^tests/",
+      "cwd": ".",
+      "runner": ".venv/bin/python",
+      "args": ["-m", "pytest", "-q"],
+      "missing_hint": "falta .venv"
+    }
+  ],
+  "bash_rules": {
+    "deny": [],
+    "ask": []
+  },
+  "dependency_hint": "",
+  "rule_refs": {},
+  "notes_dir": ".claude/fastapi-harness/"
+}

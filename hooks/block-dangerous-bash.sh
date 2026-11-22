@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# PreToolUse (Bash) — the rules of AGENTS.md that a shell command can break.
-# What lives in AGENTS.md is read by the model; this is run by code.
+# PreToolUse (Bash) — the rules a shell command can break. What the project
+# writes for its assistant is read by the model; this is run by code.
 #
 # It reads the text of the command: it stops what an assistant would run in the
-# normal course of work, not a command built to slip past it (ADR 0031).
-# Every rule that rejects runs before any rule that asks.
+# normal course of work, not a command built to slip past it.
+# Every rule that rejects runs before any rule that asks. The rules of one project
+# (bash_rules in its configuration) go after the plugin's own, in the same order.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 INPUT=$(cat)
 COMMAND=$(field "$INPUT" '.tool_input.command')
-[[ -n "$COMMAND" ]] || exit 0
+[[ -n "$COMMAND" ]] || finish
 
 matches() { printf '%s' "$COMMAND" | grep -qE -e "$1"; }
 
@@ -35,8 +36,29 @@ git_matches() { printf '%s' "$GIT" | grep -qE -e "$1"; }
 # Start of a command: beginning of the line or after a separator.
 S='(^|[;&|(][[:space:]]*|[[:space:]])'
 
-# A test file: backend/tests/, frontend/e2e/ or a *.test.ts(x) of the dashboard.
-TEST_PATH='(backend/tests/|frontend/e2e/|[^[:space:]]*\.test\.tsx?([[:space:]]|$))'
+# A test file: inside a test directory, or named like one (configuration: tests).
+escape_regex() { printf '%s' "$1" | sed -E 's/[][\.*^$()+?{}|]/\\&/g'; }
+TEST_PATH=""
+while IFS= read -r dir; do
+  [[ -n "$dir" ]] && TEST_PATH+="${TEST_PATH:+|}$(escape_regex "${dir%/}/")"
+done < <(cfg_list .tests.dirs)
+TEST_FILE_PATTERN=$(cfg .tests.file_pattern)
+[[ -n "$TEST_FILE_PATTERN" ]] && TEST_PATH+="${TEST_PATH:+|}[^[:space:]]*${TEST_FILE_PATTERN}([[:space:]]|\$)"
+[[ -n "$TEST_PATH" ]] && TEST_PATH="($TEST_PATH)"
+
+# project_rules <deny|ask> → applies the project's own rules of that kind.
+project_rules() {
+  local rule pattern message
+  while IFS= read -r rule; do
+    [[ -n "$rule" ]] || continue
+    pattern=$(printf '%s' "$rule" | jq -r '.pattern // empty')
+    message=$(printf '%s' "$rule" | jq -r '.message // empty')
+    [[ -n "$pattern" ]] || continue
+    if matches "$pattern"; then
+      "$1" "${message:-Este comando lo frena una regla del proyecto: $pattern}"
+    fi
+  done < <(printf '%s' "$CONFIG" | jq -c "(.bash_rules.$1 // [])[]" 2>/dev/null)
+}
 
 # ── Rejected ─────────────────────────────────────────────────────────────────
 
@@ -55,7 +77,7 @@ fi
 if matches "${S}(cat|less|more|head|tail|grep|rg|bat|nl|awk|sed|xxd|strings|base64|cp|scp|diff|source|\.)[[:space:]]"; then
   while IFS= read -r token; do
     if [[ "$token" == *[./]* ]] && is_secret_path "$token"; then
-      deny "Lectura bloqueada: $token tiene secretos o credenciales y no se carga en el contexto del modelo (AGENTS.md § 7). Si necesitás saber qué variables existen, leé .env.example."
+      deny "Lectura bloqueada: $token tiene secretos o credenciales y no se carga en el contexto del modelo$(ref secrets). Si necesitás saber qué variables existen, leé .env.example."
     fi
   done < <(printf '%s' "$COMMAND" | grep -oE "[^[:space:]\"';|&<>()]+")
 fi
@@ -70,53 +92,56 @@ fi
 
 # 4. Skipping the pre-commit hook, and merging.
 if git_matches "${S}git[[:space:]]+commit([[:space:]].*)?[[:space:]](--no-verify([[:space:]]|$)|-[a-ln-zA-Z]*n)"; then
-  deny "git commit --no-verify saltea el hook de pre-commit, que corre los tres verificadores (AGENTS.md § 11). Saltearlo lo decide una persona, a mano."
+  deny "git commit --no-verify saltea el hook de pre-commit y sus controles. Saltearlo lo decide una persona, a mano$(ref commit)."
 fi
 if matches "${S}gh[[:space:]]+pr[[:space:]]+merge" || matches "${S}gh[[:space:]]+api[[:space:]].*/merge([^[:alnum:]_-]|$)"; then
-  deny "Un asistente nunca hace merge: la aprobación final de un pull request es de una persona (AGENTS.md § 13)."
+  deny "Un asistente nunca hace merge: la aprobación final de un pull request es de una persona$(ref commit)."
 fi
 
-# 5. Production and deploys. Naming the word, as in a grep, is not operating on it:
-#    what counts is an environment set to it (APP_ENV=production, --env production),
+# 5. Production. Naming the word, as in a grep, is not operating on it: what
+#    counts is an environment set to it (APP_ENV=production, --env production),
 #    outside quotes.
-if unquoted_matches '(ENV|env)(=|[[:space:]]+)production([^[:alnum:]_-]|$)' \
-  || matches "${S}render[[:space:]]+deploys?([[:space:]]|$)"; then
-  deny "Ningún asistente opera contra production ni despliega: lo aprueba y lo hace una persona."
+if unquoted_matches '(ENV|env)(=|[[:space:]]+)production([^[:alnum:]_-]|$)'; then
+  deny "Ningún asistente opera contra production: lo aprueba y lo hace una persona."
 fi
+
+# 6. The project's own rules that reject.
+project_rules deny
 
 # ── Asked ────────────────────────────────────────────────────────────────────
 
-# 6. Deleting or rewriting a test from the shell: the same rule as the edit hook.
+# 7. Deleting or rewriting a test from the shell: the same rule as the edit hook.
 #    Each rule stays inside one command: it does not cross ; & or |.
-if matches "${S}(rm|unlink|mv)[[:space:]][^;&|]*${TEST_PATH}" \
-  || matches "${S}(sed|perl)[[:space:]]([^;&|]*[[:space:]])?-[a-zA-Z]*i[^;&|]*${TEST_PATH}" \
-  || matches ">[[:space:]]*${TEST_PATH}" \
-  || git_matches "${S}git[[:space:]]+(checkout|restore|rm)[[:space:]][^;&|]*${TEST_PATH}"; then
-  ask "Este comando borra o cambia un test. Un test no se modifica, no se deshabilita y no se borra sin la aprobación de una persona (ADR 0024, punto 6). Confirmá solo si la persona lo decidió."
+if [[ -n "$TEST_PATH" ]] && {
+  matches "${S}(rm|unlink|mv)[[:space:]][^;&|]*${TEST_PATH}" \
+    || matches "${S}(sed|perl)[[:space:]]([^;&|]*[[:space:]])?-[a-zA-Z]*i[^;&|]*${TEST_PATH}" \
+    || matches ">[[:space:]]*${TEST_PATH}" \
+    || git_matches "${S}git[[:space:]]+(checkout|restore|rm)[[:space:]][^;&|]*${TEST_PATH}"
+}; then
+  ask "Este comando borra o cambia un test. Un test no se modifica, no se deshabilita y no se borra sin la aprobación de una persona$(ref tests). Confirmá solo si la persona lo decidió."
 fi
 
-# 7. Discarding local work.
+# 8. Discarding local work.
 if git_matches "${S}git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-zA-Z]*f)"; then
   ask "Este comando descarta trabajo local sin vuelta atrás. Confirmalo a mano."
 fi
 
-# 8. Commits and pushes belong to the person (AGENTS.md § 13).
+# 9. Commits and pushes belong to the person.
 if git_matches "${S}git[[:space:]]+commit([[:space:]]|$)" && ! matches '--dry-run'; then
-  ask "Un asistente hace commit solo cuando una persona se lo pide (AGENTS.md § 13). Confirmá que te lo pidieron."
+  ask "Un asistente hace commit solo cuando una persona se lo pide$(ref commit). Confirmá que te lo pidieron."
 fi
 if git_matches "${S}git[[:space:]]+push([[:space:]]|$)" && ! matches '--dry-run'; then
-  ask "Un asistente hace push solo cuando una persona se lo pide (AGENTS.md § 13). Confirmá que te lo pidieron."
+  ask "Un asistente hace push solo cuando una persona se lo pide$(ref commit). Confirmá que te lo pidieron."
 fi
 
-# 9. The classification evals call the real model and cost money (AGENTS.md § 11).
-if matches 'evals\.classification\.run.*[[:space:]]--run([[:space:]]|$)'; then
-  ask "El set de regresión con --run llama al modelo real, cuesta plata y usa la clave del demo (AGENTS.md § 11). Antes de correrlo se dice cuántas llamadas son y se espera el ok: corré primero sin --run."
-fi
-
-# 10. New dependencies (AGENTS.md § 9). Installing from a requirements file stays free.
+# 10. New dependencies. Installing from a requirements file stays free.
 if { matches "${S}pip3?[[:space:]]+install([[:space:]]|$)" && ! matches '[[:space:]](-r|--requirement)[[:space:]]'; } \
   || matches "${S}(npm|pnpm|yarn|bun)[[:space:]]+(i|add|install)([[:space:]]+-[^[:space:]]+)*[[:space:]]+[^-[:space:]]"; then
-  ask "Vas a instalar una dependencia. Verificá en el registro oficial que el paquete existe y es el correcto, y justificá por qué no alcanza lo instalado (AGENTS.md § 9). En el backend se agrega al .in y se corre scripts/lock_backend_dependencies.sh."
+  HINT=$(cfg .dependency_hint)
+  ask "Vas a instalar una dependencia. Verificá en el registro oficial que el paquete existe y es el correcto, y justificá por qué no alcanza lo instalado$(ref dependencies).${HINT:+ $HINT}"
 fi
 
-exit 0
+# 11. The project's own rules that ask.
+project_rules ask
+
+finish

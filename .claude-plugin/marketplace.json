@@ -1,0 +1,14 @@
+{
+  "name": "fastapi-harness",
+  "owner": {
+    "name": "fastapi-harness"
+  },
+  "description": "El harness de Claude Code para proyectos Python y FastAPI: hooks, comandos y un agente revisor.",
+  "plugins": [
+    {
+      "name": "fastapi-harness",
+      "source": "./",
+      "description": "Hooks, comandos y un agente revisor para proyectos Python y FastAPI."
+    }
+  ]
+}
