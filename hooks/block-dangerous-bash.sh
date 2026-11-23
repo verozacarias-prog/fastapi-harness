@@ -138,13 +138,18 @@ if git_matches "${S}git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a
   ask "Este comando descarta trabajo local sin vuelta atrás. Confirmalo a mano."
 fi
 
-# 9. Commits and pushes belong to the person.
-if git_matches "${S}git[[:space:]]+commit([[:space:]]|$)" && ! matches '--dry-run'; then
-  ask "Un asistente hace commit solo cuando una persona se lo pide$(ref commit). Confirmá que te lo pidieron."
-fi
-if git_matches "${S}git[[:space:]]+push([[:space:]]|$)" && ! matches '--dry-run'; then
-  ask "Un asistente hace push solo cuando una persona se lo pide$(ref commit). Confirmá que te lo pidieron."
-fi
+# 9. A push publishes: it belongs to the person. A commit stays on the machine
+#    and is undone easily, so it runs freely. A push that only simulates
+#    (--dry-run, its own flag) runs freely too. Each push is read up to the end of
+#    its command, a comment or a substitution, and without the values of its
+#    options, so a --dry-run of something else does not count.
+while IFS= read -r push; do
+  flags=$(printf '%s' "$push" \
+    | sed -E 's/[[:space:]](-o|--push-option|--repo|--receive-pack|--exec)[[:space:]]+[^[:space:]]+//g')
+  if ! printf '%s' "$flags" | grep -qE -e '[[:space:]]--dry-run([[:space:]]|$)'; then
+    ask "Un asistente hace push solo cuando una persona se lo pide$(ref commit). Confirmá que te lo pidieron."
+  fi
+done < <(printf '%s\n' "$GIT" | grep -oE "${S}git[[:space:]]+push([[:space:]][^;&|#\`()]*)?")
 
 # 10. New dependencies. Installing from a requirements file stays free.
 if { matches "${S}pip3?[[:space:]]+install([[:space:]]|$)" && ! matches '[[:space:]](-r|--requirement)[[:space:]]'; } \
