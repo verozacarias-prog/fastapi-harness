@@ -452,6 +452,109 @@ expect "V-5 plain commit: does not cite verify" no \
   "$(mentions "$(reason $H "$(bash_json 'git commit -m x')")" 'AGENTS\.md § 11')"
 mv "$SANDBOX.saved" "$S/.claude/fastapi-harness.json"
 
+# ── Text that only names a secret or a flag (issue #5, cases B-1 to B-17) ────
+
+H=block-dangerous-bash.sh
+NL=$'\n'
+expect "B-1 cat .env"                      deny "$(decision $H "$(bash_json 'cat .env')")"
+expect "B-2 grep in config/.env.local"     deny "$(decision $H "$(bash_json 'grep KEY config/.env.local')")"
+expect "B-3 cat quoted .env"               deny "$(decision $H "$(bash_json 'cat ".env"')")"
+expect "B-4 cat .env with a heredoc"       deny \
+  "$(decision $H "$(bash_json "cat .env <<'EOF'${NL}x${NL}EOF")")"
+expect "B-5 python heredoc naming .env"    allow \
+  "$(decision $H "$(bash_json "python3 - <<'EOF'${NL}print('.env')${NL}EOF")")"
+expect "B-6 cat > file, body names .env"   allow \
+  "$(decision $H "$(bash_json "cat > notas.md <<'EOF'${NL}no leer .env${NL}EOF")")"
+expect "B-7 commit message names cat .env" ask \
+  "$(decision $H "$(bash_json 'git commit -m "menciona cat .env"')")"
+expect "B-8 multiline message names the flag" ask \
+  "$(decision $H "$(bash_json "git commit -m \"título${NL}${NL}cuerpo que nombra --no-verify\"")")"
+expect "B-9 commit --no-verify"            deny "$(decision $H "$(bash_json 'git commit -m x --no-verify')")"
+expect "B-10 flag named in the first line of a multiline message" ask \
+  "$(decision $H "$(bash_json "git commit -m \"título que nombra --no-verify${NL}${NL}cuerpo\"")")"
+expect "B-11 read inside quoted command substitution" deny \
+  "$(decision $H "$(bash_json 'echo "$(cat .env)"')")"
+expect "B-12 unquoted heredoc body is expanded" deny \
+  "$(decision $H "$(bash_json "cat <<EOF${NL}\$(cat .env)${NL}EOF")")"
+expect "B-13 heredoc to a shell" deny \
+  "$(decision $H "$(bash_json "bash <<EOF${NL}cat .env${NL}EOF")")"
+expect "B-14 quoted heredoc to a shell" deny \
+  "$(decision $H "$(bash_json "bash <<'EOF'${NL}cat .env${NL}EOF")")"
+expect "B-15 heredoc marker inside quotes hides nothing" deny \
+  "$(decision $H "$(bash_json "git commit -m \"ver <<EOF\"${NL}git push --force${NL}EOF")")"
+expect "B-16 command after a heredoc with a dash in its delimiter" deny \
+  "$(decision $H "$(bash_json "cat <<'END-X'${NL}x${NL}END-X${NL}cat .env")")"
+expect "B-17 escaped quote does not pair across lines" deny \
+  "$(decision $H "$(bash_json "echo \"a \\\" b\"${NL}git push --force${NL}echo \"c\"")")"
+
+# ── What only text can be, and what still runs (issue #5, cases R-1 to R-15) ──
+
+r() { decision $H "$(bash_json "$1")"; }
+expect "R-1 commit message from a quoted cat heredoc" ask \
+  "$(r "git commit -m \"\$(cat <<'EOF'${NL}no leer .env, sin --no-verify${NL}EOF${NL})\"")"
+expect "R-2 non-ASCII before a read"           deny "$(r 'echo café; cat .env')"
+expect "R-3 non-ASCII before a force push"     deny "$(r 'echo listo ✓ && git push --force')"
+expect "R-4 comment with an accent, then push" ask  "$(r "# subo la versión${NL}git push origin x")"
+expect "R-5 comment with an apostrophe, then force push" deny \
+  "$(r "echo hi # it's ok${NL}git push --force")"
+expect "R-6 comment with an apostrophe, then a read" deny \
+  "$(r "echo hi # it's ok${NL}cat .env")"
+expect "R-7 quoted heredoc piped to a shell"   deny "$(r "cat <<'EOF' | bash${NL}cat .env${NL}EOF")"
+expect "R-8 quoted heredoc to sudo bash"       deny "$(r "sudo bash <<'EOF'${NL}cat .env${NL}EOF")"
+expect "R-9 quoted heredoc to FOO=1 bash"      deny "$(r "FOO=1 bash <<'EOF'${NL}git push --force${NL}EOF")"
+expect "R-10 read inside bash -c"              deny "$(r 'bash -c "cd /x && cat .env"')"
+expect "R-11 read inside sh -c"                deny "$(r "sh -c 'echo; cat .env'")"
+expect "R-12 read inside ssh"                  deny "$(r 'ssh host "cat .env"')"
+expect "R-13 commit message that runs a read"  deny "$(r 'git commit -m "$(cat .env)"')"
+expect "R-14 file written by a heredoc, then run" deny \
+  "$(r "cat > s.sh <<'EOF'${NL}git push --force${NL}EOF${NL}bash s.sh")"
+expect "R-15 cat heredoc that is not a commit message" deny \
+  "$(r "bash -c \"\$(cat <<'EOF'${NL}cat .env${NL}EOF${NL})\"")"
+
+# ── Commands built to make text look inert (issue #5, cases T-1 to T-9) ──────
+
+Q1="'"
+expect "T-1 -m of another command after git log" deny \
+  "$(r "git log --grep commit; bash -cm \"\$(cat <<'EOF'${NL}rm -rf ~${NL}EOF${NL})\"")"
+expect "T-2 -m of eval after git log"  deny "$(r 'git log commit; eval true -m "; rm -rf ~"')"
+expect "T-3 -m of bash -c after git log" deny "$(r 'git log commit; bash -cm "cat .env"')"
+expect "T-4 commit heredoc inside an open quote" deny \
+  "$(r "echo ${Q1} git commit -m \"\$(cat <<'EOF'${NL}${Q1}; rm -rf ~; #${NL}EOF")"
+expect "T-5 file heredoc inside a shell heredoc" deny \
+  "$(r "bash <<'X'${NL}cat > f <<'EOF'${NL}X${NL}rm -rf ~${NL}EOF")"
+expect "T-6 commit heredoc closed by EOF)" deny \
+  "$(r "git commit -m \"\$(cat <<'EOF'${NL}msg${NL}EOF)\"; rm -rf ~${NL}EOF")"
+expect "T-7 heredoc written to a git hook" deny \
+  "$(r "cat > .git/hooks/pre-commit <<'EOF'${NL}rm -rf ~${NL}EOF")"
+BIG=$(head -c 40000 < /dev/zero | tr '\0' 'a')
+T8_START=$SECONDS
+T8=$(r "echo ${BIG}${NL}git push --force")
+T8_TIME=$(( SECONDS - T8_START ))
+expect "T-8 long command: deny" deny "$T8"
+expect "T-8 long command: under 10 seconds" yes "$([[ $T8_TIME -lt 10 ]] && echo yes || echo no)"
+expect "T-9 grep and a message that names a secret" ask \
+  "$(r 'grep -n x README.md && git commit -m "no leer .env"')"
+expect "T-10 unpaired ) in a commit heredoc body" deny \
+  "$(r "git commit -m \"\$(cat <<'EOF'${NL}a) el paso \`rm -rf build\` ya no corre${NL}EOF${NL})\"")"
+expect "T-11 commit -e before the message" deny "$(r 'git commit -e -m "cd /tmp; rm -rf x"')"
+expect "T-12 commit --edit after the message" deny "$(r 'git commit -m "cd /tmp; rm -rf x" --edit')"
+
+# ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
+
+H=protect-tests-and-specs.sh
+cp "$S/.claude/fastapi-harness.json" "$SANDBOX.saved"
+jq '.notes_dir = "docs/notas-ia/"' "$SANDBOX.saved" > "$S/.claude/fastapi-harness.json"
+mkdir -p "$S/docs/notas-ia" "$S/.claude/fastapi-harness"
+printf '# Notas\n' > "$S/docs/notas-ia/ticket.md"
+printf '# Notas\n' > "$S/.claude/fastapi-harness/ticket.md"
+expect "N-3 configured notes_dir" ask \
+  "$(decision $H "$(edit_json "$S/docs/notas-ia/ticket.md" '# Notas' '# Otras notas')")"
+expect "N-4 default folder when notes_dir is elsewhere" allow \
+  "$(decision $H "$(edit_json "$S/.claude/fastapi-harness/ticket.md" '# Notas' '# Otras notas')")"
+rm -f "$S/docs/notas-ia/ticket.md" "$S/.claude/fastapi-harness/ticket.md"
+rmdir "$S/docs/notas-ia" "$S/.claude/fastapi-harness"
+mv "$SANDBOX.saved" "$S/.claude/fastapi-harness.json"
+
 # The plain project: a FastAPI service without .claude/fastapi-harness.json.
 P="$PLAIN"
 export CLAUDE_PROJECT_DIR="$P"
@@ -494,6 +597,19 @@ H=block-dangerous-bash.sh
 expect "V-4 without rule_refs: deny" deny "$(decision $H "$(bash_json 'git commit -m x --no-verify')")"
 expect "V-4 without rule_refs: no reference" no \
   "$(mentions "$(reason $H "$(bash_json 'git commit -m x --no-verify')")" '\([^)]*\)$|\([^)]*\)\.')"
+
+H=protect-tests-and-specs.sh
+mkdir -p "$P/.claude/fastapi-harness" "$P/docs"
+printf '# Notas\n' > "$P/.claude/fastapi-harness/ticket.md"
+printf '# Otra\n' > "$P/docs/otra.md"
+expect "N-1 edit a note, default notes_dir" ask \
+  "$(decision $H "$(edit_json "$P/.claude/fastapi-harness/ticket.md" '# Notas' '# Otras notas')")"
+expect "N-2 create a note" ask \
+  "$(decision $H "$(write_json "$P/.claude/fastapi-harness/nueva.md" '# Nueva')")"
+expect "N-5 edit another document" allow \
+  "$(decision $H "$(edit_json "$P/docs/otra.md" '# Otra' '# Otra cosa')")"
+rm -f "$P/.claude/fastapi-harness/ticket.md" "$P/docs/otra.md"
+rmdir "$P/.claude/fastapi-harness" "$P/docs"
 H=block-secret-reads.sh
 
 mkdir -p "$P/.claude"

@@ -13,6 +13,15 @@ INPUT=$(cat)
 COMMAND=$(field "$INPUT" '.tool_input.command')
 [[ -n "$COMMAND" ]] || finish
 
+# The rules read the command without the text that cannot run (a commit message,
+# the body of a heredoc written to a file): inert-text.awk says which. If that
+# copy cannot be made, or the command is longer than 32 KB, they read the command
+# as it came.
+if (( $(printf '%s' "$COMMAND" | LC_ALL=C wc -c) <= 32768 )); then
+  INERT_FREE=$(printf '%s' "$COMMAND" | LC_ALL=C awk -f "$(dirname "${BASH_SOURCE[0]}")/inert-text.awk" 2>/dev/null) \
+    && [[ -n "$INERT_FREE" ]] && COMMAND=$INERT_FREE
+fi
+
 matches() { printf '%s' "$COMMAND" | grep -qE -e "$1"; }
 
 # Git is read in a normalized copy of the command:
@@ -33,8 +42,9 @@ while :; do
 done
 git_matches() { printf '%s' "$GIT" | grep -qE -e "$1"; }
 
-# Start of a command: beginning of the line or after a separator.
-S='(^|[;&|(][[:space:]]*|[[:space:]])'
+# Start of a command: beginning of the line, after a separator or after a
+# backtick, which opens a command substitution.
+S='(^|[;&|(`][[:space:]]*|[[:space:]])'
 
 # A test file: inside a test directory, or named like one (configuration: tests).
 escape_regex() { printf '%s' "$1" | sed -E 's/[][\.*^$()+?{}|]/\\&/g'; }
@@ -74,12 +84,14 @@ fi
 # 2. Reading a secrets file through the shell (the Read tool has its own hook).
 #    The same rule as the Read hook, on every word that looks like a file: it has
 #    a dot or a slash, so a bare word like "credentials" in a grep stays free.
-if matches "${S}(cat|less|more|head|tail|grep|rg|bat|nl|awk|sed|xxd|strings|base64|cp|scp|diff|source|\.)[[:space:]]"; then
+#    A reading command also counts right after a quote, as in bash -c "cat …" or
+#    ssh host 'cat …', where another shell runs it.
+if matches "(${S}|[\"'])(cat|less|more|head|tail|grep|rg|bat|nl|awk|sed|xxd|strings|base64|cp|scp|diff|source|\.)[[:space:]]"; then
   while IFS= read -r token; do
     if [[ "$token" == *[./]* ]] && is_secret_path "$token"; then
       deny "Lectura bloqueada: $token tiene secretos o credenciales y no se carga en el contexto del modelo$(ref secrets). Si necesitás saber qué variables existen, leé .env.example."
     fi
-  done < <(printf '%s' "$COMMAND" | grep -oE "[^[:space:]\"';|&<>()]+")
+  done < <(printf '%s' "$COMMAND" | grep -oE "[^[:space:]\"'\`;|&<>()]+")
 fi
 
 # 3. History rewriting and force push, in any of its forms.
