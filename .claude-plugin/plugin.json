@@ -1,6 +1,6 @@
 {
   "name": "fastapi-harness",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Hooks, comandos, un agente revisor y plantillas de especificación para trabajar con Claude Code en proyectos Python y FastAPI con tests primero y especificación en docs/.",
   "author": {
     "name": "Verónica Zacarías"

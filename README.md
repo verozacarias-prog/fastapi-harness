@@ -16,7 +16,7 @@ Claude Code los corre solo, antes de cada acción o al cerrar un turno.
 | Hook | Cuándo | Qué hace |
 |---|---|---|
 | `block-secret-reads.sh` | Antes de leer o de buscar con Grep | Rechaza `.env` y sus variantes, claves (`*.pem`, `*.key`, `id_rsa`), credenciales y `service-account*.json`. Deja leer `.env.example` y lo que el proyecto declare en `secrets_allowed`. En un Grep mira solo la ruta que se le pasa: una búsqueda sobre una carpeta queda, en lo posible, para el `permissions.deny` del proyecto ([abajo](#los-secretos-dos-controles-a-propósito)) |
-| `protect-tests-and-specs.sh` | Antes de editar o escribir | Rechaza editar archivos de entorno y completar la línea de aprobación de una `spec.md`. Pregunta antes de cambiar, borrar o deshabilitar algo de un test existente, editar una migración ya versionada o tocar los hooks y su configuración |
+| `protect-tests-and-specs.sh` | Antes de editar o escribir | Rechaza editar archivos de entorno y completar la línea de aprobación de una `spec.md`. Pregunta antes de cambiar, borrar o deshabilitar algo de un test existente, editar una migración ya versionada, tocar los hooks y su configuración, o cambiar una nota del proyecto (`notes_dir`) |
 | `block-dangerous-bash.sh` | Antes de un comando | Rechaza el borrado recursivo, leer secretos por la terminal, el push forzado, reescribir la historia, `--no-verify`, el merge y operar contra `production`. Pregunta antes de borrar o reescribir un test, descartar trabajo local, hacer commit o push, e instalar una dependencia. Suma las reglas propias del proyecto |
 | `verify-tests-on-stop.sh` | Al cerrar el turno | Corre las suites que tienen cambios sin commitear y no deja cerrar el turno con una en rojo. Si lo único que cambió son tests, es la fase en rojo y deja pasar |
 
@@ -41,7 +41,7 @@ Para explorar en local con la suite en rojo, `HARNESS_ALLOW_RED=1` en el `env` d
    {
      "extraKnownMarketplaces": {
        "fastapi-harness": {
-         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.2.1" }
+         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.3.0" }
        }
      },
      "enabledPlugins": { "fastapi-harness@fastapi-harness": true }
@@ -113,6 +113,59 @@ copiarlas ahí y espera el ok. Desde entonces son del proyecto, que las ajusta d
 Por eso van los dos: el `deny` del proyecto es la red que no depende del plugin, y el hook
 cubre lo que el `deny` no puede expresar.
 
+Por la terminal, `block-dangerous-bash.sh` lee el texto del comando, no lo interpreta como el
+shell: ante la duda, frena. Rechaza un comando de lectura (`cat`, `grep`, `sed`…) que nombra un
+archivo de secretos en cualquier parte del comando, aunque vaya entre comillas, dentro de
+`$(...)`, de backticks, de `bash -c "…"` o en el cuerpo de un heredoc, salvo el texto que se
+saca antes de leerlo (abajo).
+
+Antes de leerlo saca solo el texto que no puede ejecutarse, en las dos formas que un asistente
+escribe todos los días, y solo cuando el comando empieza con ellas, en su primera línea
+([`hooks/inert-text.awk`](hooks/inert-text.awk)):
+
+- el mensaje de un `git commit … -m "…"`, aunque ocupe varias líneas, si no tiene `$`, backticks
+  ni `\`. El `git commit` puede ir también después de `&&`, `||` o `;`, si lo anterior no tiene
+  comillas, `$`, backticks, `\`, `<`, `#`, paréntesis ni llaves;
+- el cuerpo de un heredoc a `cat` con el delimitador entre comillas simples (`<<'EOF'`), cuando
+  es el mensaje de un commit (`git commit -m "$(cat <<'EOF'` … `EOF` y `)"`) y el cuerpo no
+  tiene `)`, que en el bash de macOS cierra el `$(`; o cuando escribe un archivo
+  (`cat > archivo <<'EOF'` … `EOF`) y el comando termina ahí. No se saca si el archivo se
+  ejecuta después: por ejemplo, un hook de git, `.gitconfig`, `.mcp.json`, lo que está en
+  `.claude/`, `.husky/` o `.github/`, o un archivo de inicio del shell, como `.bashrc`.
+
+El mensaje no se saca si el commit lleva `-e` o `--edit`: git se lo pasa al editor. Ante
+cualquier otra forma, o un comando de más de 32 KB, lee el comando entero. Por eso el texto
+que solo menciona un archivo o una bandera se rechaza en otros casos, como el cuerpo de un
+heredoc a Python que nombra `.env`, o `echo 'cat .env no se lee'`: el hook no sabe a qué apunta
+cada palabra. El rodeo es escribir el texto con la herramienta de escritura y pasarlo por
+archivo, como `git commit -F`.
+
+Los límites: no se frena un programa que abre el archivo por su cuenta, como
+`python3 -c "open('.env')"`, ni la lectura que pasa por `xargs`, ni lo que hace un archivo
+escrito por un comando y ejecutado en otro. El `permissions.deny` no aplica a la terminal. Por
+la terminal tampoco se pregunta antes de escribir una nota del proyecto, un hook o su
+configuración: esa protección es de las herramientas de edición, y compara `notes_dir` tal como
+está escrito, así que no lo reconoce si empieza con `./` o es una ruta absoluta.
+
+## Tomar una versión nueva
+
+`claude plugin update` no alcanza: el marketplace queda registrado para el usuario con el `ref`
+de la primera instalación, y el `ref` del `settings.json` del proyecto no lo cambia.
+Comprobado el 23/11/2026 con Claude Code 2.1.330. En cada clon, con la versión nueva:
+
+```sh
+claude plugin marketplace remove fastapi-harness
+claude plugin marketplace add "https://github.com/<owner>/fastapi-harness.git#v0.3.0"
+claude plugin install fastapi-harness@fastapi-harness --scope project
+git restore .claude/settings.json
+```
+
+El último paso hace falta porque `plugin install` deja vacío el `extraKnownMarketplaces` del
+`settings.json` del proyecto, y sin ese bloque otro clon no sabe de dónde sacar el plugin. El
+`restore` deshace también un `ref` cambiado antes: el `ref` del `settings.json` se cambia
+después, en el commit que toma la versión nueva, y antes de commitear se revisa que el bloque
+siga entero.
+
 ## La configuración
 
 El plugin trae [`config/default.json`](config/default.json), pensado para un servicio con
@@ -159,8 +212,7 @@ que usar, dónde se guarda la descripción de un pull request o qué invariantes
   `tests/` y se commitean en rojo, y recién después se implementa.
 - **Un cambio grande** empieza como propuesta en `proposals/NNNN-<tema>.md`.
 - **Una versión nueva** sube `version` en `.claude-plugin/plugin.json` y lleva su tag. Cada
-  proyecto la toma cambiando `ref` en su `settings.json` y corriendo
-  `claude plugin update fastapi-harness@fastapi-harness`.
+  proyecto la toma como se explica en [Tomar una versión nueva](#tomar-una-versión-nueva).
 - **La estructura va en inglés y el contenido para personas, en español:**
   - en inglés: las carpetas, los nombres de los archivos de código y de configuración, las
     claves de la configuración, los nombres de los comandos y del agente, el código, los
