@@ -41,7 +41,7 @@ Para explorar en local con la suite en rojo, `HARNESS_ALLOW_RED=1` en el `env` d
    {
      "extraKnownMarketplaces": {
        "fastapi-harness": {
-         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.2.0" }
+         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.2.1" }
        }
      },
      "enabledPlugins": { "fastapi-harness@fastapi-harness": true }
@@ -132,7 +132,7 @@ valores por defecto y lo avisan.
 | `suites` | Las suites del hook de cierre: qué rutas mira (`watch`), qué archivos son tests (`tests_pattern`), desde qué carpeta corre (`cwd`), el ejecutable (`runner`), sus argumentos y qué decir si falta |
 | `bash_rules` | Las reglas propias del proyecto, en `deny` y en `ask`, cada una con su `pattern` (expresión regular extendida) y su `message` |
 | `dependency_hint` | Lo que se suma al aviso de una dependencia nueva, como el script de lockfile del proyecto |
-| `rule_refs` | Dónde escribe el proyecto cada regla (`secrets`, `tests`, `approval`, `migrations`, `commit`, `dependencies`), para citarlo en el mensaje del hook |
+| `rule_refs` | Dónde escribe el proyecto cada regla (`secrets`, `tests`, `approval`, `migrations`, `commit`, `verify`, `dependencies`), para citarlo en el mensaje del hook. `verify` es la de los controles que corren antes de un commit, y la cita el rechazo de `--no-verify`; sin ella, ese rechazo cita `commit` |
 | `notes_dir` | La carpeta de las notas del proyecto para los comandos y el agente |
 
 Un ejemplo completo, con un backend y un dashboard, está en
