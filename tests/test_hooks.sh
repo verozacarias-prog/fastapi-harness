@@ -534,6 +534,10 @@ expect "T-8 long command: deny" deny "$T8"
 expect "T-8 long command: under 10 seconds" yes "$([[ $T8_TIME -lt 10 ]] && echo yes || echo no)"
 expect "T-9 grep and a message that names a secret" ask \
   "$(r 'grep -n x README.md && git commit -m "no leer .env"')"
+expect "T-10 unpaired ) in a commit heredoc body" deny \
+  "$(r "git commit -m \"\$(cat <<'EOF'${NL}a) el paso \`rm -rf build\` ya no corre${NL}EOF${NL})\"")"
+expect "T-11 commit -e before the message" deny "$(r 'git commit -e -m "cd /tmp; rm -rf x"')"
+expect "T-12 commit --edit after the message" deny "$(r 'git commit -m "cd /tmp; rm -rf x" --edit')"
 
 # ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
 
