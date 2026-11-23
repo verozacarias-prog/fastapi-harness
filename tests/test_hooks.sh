@@ -487,6 +487,30 @@ expect "B-16 command after a heredoc with a dash in its delimiter" deny \
 expect "B-17 escaped quote does not pair across lines" deny \
   "$(decision $H "$(bash_json "echo \"a \\\" b\"${NL}git push --force${NL}echo \"c\"")")"
 
+# ── What only text can be, and what still runs (issue #5, cases R-1 to R-15) ──
+
+r() { decision $H "$(bash_json "$1")"; }
+expect "R-1 commit message from a quoted cat heredoc" ask \
+  "$(r "git commit -m \"\$(cat <<'EOF'${NL}no leer .env, sin --no-verify${NL}EOF${NL})\"")"
+expect "R-2 non-ASCII before a read"           deny "$(r 'echo café; cat .env')"
+expect "R-3 non-ASCII before a force push"     deny "$(r 'echo listo ✓ && git push --force')"
+expect "R-4 comment with an accent, then push" ask  "$(r "# subo la versión${NL}git push origin x")"
+expect "R-5 comment with an apostrophe, then force push" deny \
+  "$(r "echo hi # it's ok${NL}git push --force")"
+expect "R-6 comment with an apostrophe, then a read" deny \
+  "$(r "echo hi # it's ok${NL}cat .env")"
+expect "R-7 quoted heredoc piped to a shell"   deny "$(r "cat <<'EOF' | bash${NL}cat .env${NL}EOF")"
+expect "R-8 quoted heredoc to sudo bash"       deny "$(r "sudo bash <<'EOF'${NL}cat .env${NL}EOF")"
+expect "R-9 quoted heredoc to FOO=1 bash"      deny "$(r "FOO=1 bash <<'EOF'${NL}git push --force${NL}EOF")"
+expect "R-10 read inside bash -c"              deny "$(r 'bash -c "cd /x && cat .env"')"
+expect "R-11 read inside sh -c"                deny "$(r "sh -c 'echo; cat .env'")"
+expect "R-12 read inside ssh"                  deny "$(r 'ssh host "cat .env"')"
+expect "R-13 commit message that runs a read"  deny "$(r 'git commit -m "$(cat .env)"')"
+expect "R-14 file written by a heredoc, then run" deny \
+  "$(r "cat > s.sh <<'EOF'${NL}git push --force${NL}EOF${NL}bash s.sh")"
+expect "R-15 cat heredoc that is not a commit message" deny \
+  "$(r "bash -c \"\$(cat <<'EOF'${NL}cat .env${NL}EOF${NL})\"")"
+
 # ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
 
 H=protect-tests-and-specs.sh
