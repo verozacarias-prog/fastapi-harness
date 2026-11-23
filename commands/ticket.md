@@ -38,6 +38,11 @@ con una recomendación.
 
 - En una historia, escribí o actualizá la `spec.md` de la funcionalidad desde la plantilla del
   proyecto (`specs.template_dir`).
+- Si el proyecto no tiene esa carpeta, ofrecé copiar ahí las plantillas del plugin:
+  `${CLAUDE_PLUGIN_ROOT}/templates/feature/spec.md`, `pr.md` y `ui_contract.md`. **Pausa:**
+  copialas solo con el ok de la persona, leyendo cada archivo y escribiéndolo en la carpeta del
+  proyecto. Desde ahí son del proyecto: no vuelvas a leer las del plugin, y decile que las
+  ajuste donde marcan `<…>`.
 - Si la especificación y el código no coinciden, o dos documentos de la especificación se
   contradicen, frená y reportalo: la decisión es de la persona.
 

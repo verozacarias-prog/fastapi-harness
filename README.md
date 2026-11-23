@@ -15,7 +15,7 @@ Claude Code los corre solo, antes de cada acción o al cerrar un turno.
 
 | Hook | Cuándo | Qué hace |
 |---|---|---|
-| `block-secret-reads.sh` | Antes de leer | Rechaza `.env` y sus variantes, claves (`*.pem`, `*.key`, `id_rsa`), credenciales y `service-account*.json`. Deja leer `.env.example` y lo que el proyecto declare en `secrets_allowed` |
+| `block-secret-reads.sh` | Antes de leer o de buscar con Grep | Rechaza `.env` y sus variantes, claves (`*.pem`, `*.key`, `id_rsa`), credenciales y `service-account*.json`. Deja leer `.env.example` y lo que el proyecto declare en `secrets_allowed`. En un Grep mira solo la ruta que se le pasa: una búsqueda sobre una carpeta queda, en lo posible, para el `permissions.deny` del proyecto ([abajo](#los-secretos-dos-controles-a-propósito)) |
 | `protect-tests-and-specs.sh` | Antes de editar o escribir | Rechaza editar archivos de entorno y completar la línea de aprobación de una `spec.md`. Pregunta antes de cambiar, borrar o deshabilitar algo de un test existente, editar una migración ya versionada o tocar los hooks y su configuración |
 | `block-dangerous-bash.sh` | Antes de un comando | Rechaza el borrado recursivo, leer secretos por la terminal, el push forzado, reescribir la historia, `--no-verify`, el merge y operar contra `production`. Pregunta antes de borrar o reescribir un test, descartar trabajo local, hacer commit o push, e instalar una dependencia. Suma las reglas propias del proyecto |
 | `verify-tests-on-stop.sh` | Al cerrar el turno | Corre las suites que tienen cambios sin commitear y no deja cerrar el turno con una en rojo. Si lo único que cambió son tests, es la fase en rojo y deja pasar |
@@ -41,7 +41,7 @@ Para explorar en local con la suite en rojo, `HARNESS_ALLOW_RED=1` en el `env` d
    {
      "extraKnownMarketplaces": {
        "fastapi-harness": {
-         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.1.0" }
+         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.2.0" }
        }
      },
      "enabledPlugins": { "fastapi-harness@fastapi-harness": true }
@@ -57,10 +57,61 @@ Para explorar en local con la suite en rojo, `HARNESS_ALLOW_RED=1` en el `env` d
    Hasta que se corre, esa copia trabaja sin hooks. Ponelo como primer paso en el README del
    proyecto.
 
-3. Si el proyecto no tiene la forma por defecto, su `.claude/fastapi-harness.json` (abajo).
+3. El bloque `permissions.deny` de [`templates/settings-deny.json`](templates/settings-deny.json)
+   en el mismo `settings.json` ([abajo](#los-secretos-dos-controles-a-propósito)).
 
-4. Si un comando necesita pasos propios del proyecto, sus notas en `.claude/fastapi-harness/`
+4. Las reglas que el plugin supone, escritas en el `AGENTS.md` o `CLAUDE.md` del proyecto
+   ([abajo](#lo-que-el-proyecto-tiene-que-tener-escrito)).
+
+5. Si el proyecto no tiene la forma por defecto, su `.claude/fastapi-harness.json` (abajo).
+
+6. Si un comando necesita pasos propios del proyecto, sus notas en `.claude/fastapi-harness/`
    (abajo).
+
+## Lo que el proyecto tiene que tener escrito
+
+El plugin no trae el método de trabajo: lo ejecuta. El método es una regla del proyecto y se
+escribe una sola vez, en su `AGENTS.md` o `CLAUDE.md`, con sus palabras. Ese archivo no tiene
+que describir el plugin: los hooks corren solos, y los comandos y el agente aparecen con su
+descripción.
+
+Lo que sí tiene que estar escrito son las reglas que el plugin supone y que ningún hook hace
+cumplir del todo. Sin ellas, el asistente se entera recién cuando un hook lo frena, o no se
+entera:
+
+| Regla | Qué pieza la supone |
+|---|---|
+| Los casos de un corte los aprueba una persona antes de que se escriba un test, y el asistente no completa la línea de aprobación | `/ticket` (pasos 3 y 4) y `protect-tests-and-specs.sh`, que solo controla la línea |
+| Los tests se escriben tal como se aprobaron, se corren y se commitean en rojo antes de implementar | `/ticket` (paso 4) y `verify-tests-on-stop.sh`, que deja cerrar el turno en rojo solo si lo único que cambió son tests |
+| Un test no se modifica, deshabilita ni borra para que la suite pase | `protect-tests-and-specs.sh` y `block-dangerous-bash.sh`, que preguntan pero no deciden |
+| El asistente hace commit solo cuando se lo piden, y nunca merge | `/ticket`, `block-dangerous-bash.sh` (pregunta el commit, rechaza el merge) |
+
+Si una regla del proyecto y el plugin se contradicen, manda la del proyecto: se ajustan sus
+notas o se propone el cambio acá.
+
+## Las plantillas de una funcionalidad
+
+[`templates/feature/`](templates/feature/) trae `spec.md`, `pr.md` y `ui_contract.md`: los
+criterios, los casos por corte con su línea de aprobación, la descripción del pull request y
+el contrato de una pantalla. La línea de aprobación usa los valores por defecto de `specs`, así
+que el hook la entiende sin configurar nada.
+
+Se copian una vez. Si el proyecto no tiene la carpeta de `specs.template_dir`, `/ticket` ofrece
+copiarlas ahí y espera el ok. Desde entonces son del proyecto, que las ajusta donde marcan
+`<…>`, y el plugin no las vuelve a leer.
+
+## Los secretos: dos controles, a propósito
+
+| | `permissions.deny` del proyecto | `block-secret-reads.sh` |
+|---|---|---|
+| Vale sin instalar el plugin | Sí | No: hasta el `plugin install` de cada clon, esa copia no tiene hooks |
+| Cubre las otras herramientas que leen archivos, como un Grep sobre una carpeta | En lo posible: Claude Code dice que aplica las reglas de `Read` a Grep y Glob «best-effort», sin garantizarlo | No: `Read`, y `Grep` sobre la ruta exacta |
+| Cubre `.env.local` y otras variantes | Solo si se escriben una por una: `.env.*` bloquearía también `.env.example` | Sí, y deja leer `.env.example` |
+| Cubre archivos como `compose.env` (`*.env`) | No: el bloque sugerido no los nombra | Sí, salvo los que el proyecto declare en `secrets_allowed` |
+| Explica el rechazo | No | Sí, y dice qué leer en su lugar |
+
+Por eso van los dos: el `deny` del proyecto es la red que no depende del plugin, y el hook
+cubre lo que el `deny` no puede expresar.
 
 ## La configuración
 
@@ -114,7 +165,7 @@ que usar, dónde se guarda la descripción de un pull request o qué invariantes
   - en inglés: las carpetas, los nombres de los archivos de código y de configuración, las
     claves de la configuración, los nombres de los comandos y del agente, el código, los
     comentarios y los nombres de los casos de test;
-  - en español: los nombres de los documentos (como `proposals/0002-verificador-de-arquitectura.md`),
+  - en español: los nombres de los documentos (como `proposals/0002-plantillas-metodo-y-secretos.md`),
     el README, las propuestas, el texto de los comandos y del agente, los mensajes de los hooks
     y los commits.
 
@@ -127,7 +178,7 @@ que usar, dónde se guarda la descripción de un pull request o qué invariantes
 
 ```sh
 bash tests/test_hooks.sh    # cada hook, contra proyectos de prueba descartables
-bash tests/test_plugin.sh   # manifiestos, registro de hooks, configuración y frontmatter
+bash tests/test_plugin.sh   # manifiestos, registro de hooks, configuración, frontmatter y plantillas
 ```
 
 Necesitan `bash`, `git` y `jq`. El CI los corre en cada push y en cada pull request.
