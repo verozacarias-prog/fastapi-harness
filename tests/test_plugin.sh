@@ -148,7 +148,7 @@ done
 
 expect "P-13 README section" yes \
   "$(grep -qE '^#+ Lo que el proyecto tiene que tener escrito' "$ROOT/README.md" && echo yes || echo no)"
-expect "P-13 no copy of the method" "" \
+expect "P-13 no metodo.md nor templates/agents-section.md" "" \
   "$(cd "$ROOT" && ls metodo.md templates/agents-section.md 2>/dev/null)"
 
 # ── Secrets (proposal 0002) ──────────────────────────────────────────────────
