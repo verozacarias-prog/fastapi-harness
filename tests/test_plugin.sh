@@ -151,6 +151,11 @@ expect "P-13 README section" yes \
 expect "P-13 no metodo.md nor templates/agents-section.md" "" \
   "$(cd "$ROOT" && ls metodo.md templates/agents-section.md 2>/dev/null)"
 
+# ── The reference of the --no-verify rejection (issue #1) ────────────────────
+
+expect "P-16 README names rule_refs.verify" yes \
+  "$(grep -E '^\| `rule_refs` \|' "$ROOT/README.md" | grep -qF '`verify`' && echo yes || echo no)"
+
 # ── Secrets (proposal 0002) ──────────────────────────────────────────────────
 
 DENY="$ROOT/templates/settings-deny.json"

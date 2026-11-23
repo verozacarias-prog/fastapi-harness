@@ -426,6 +426,32 @@ H=protect-tests-and-specs.sh
 expect "C-11 edit the project configuration" ask \
   "$(decision $H "$(edit_json "$S/.claude/fastapi-harness.json" '"develop"' '"main"')")"
 
+# ── Reference of the --no-verify rejection (issue #1, cases V-1 to V-5) ──────
+
+H=block-dangerous-bash.sh
+NO_VERIFY='git commit -m x --no-verify'
+# V-3 first: the project configuration has rule_refs.commit and no rule_refs.verify.
+expect "V-3 without verify: deny" deny "$(decision $H "$(bash_json "$NO_VERIFY")")"
+expect "V-3 without verify: cites commit" yes \
+  "$(mentions "$(reason $H "$(bash_json "$NO_VERIFY")")" 'AGENTS\.md § 13')"
+
+cp "$S/.claude/fastapi-harness.json" "$SANDBOX.saved"
+jq '.rule_refs.verify = "AGENTS.md § 11"' "$SANDBOX.saved" > "$S/.claude/fastapi-harness.json"
+expect "V-1 with verify: deny" deny "$(decision $H "$(bash_json "$NO_VERIFY")")"
+expect "V-1 with verify: cites verify" yes \
+  "$(mentions "$(reason $H "$(bash_json "$NO_VERIFY")")" 'AGENTS\.md § 11')"
+expect "V-1 with verify: does not cite commit" no \
+  "$(mentions "$(reason $H "$(bash_json "$NO_VERIFY")")" 'AGENTS\.md § 13')"
+expect "V-2 short flag: deny" deny "$(decision $H "$(bash_json 'git commit -nm x')")"
+expect "V-2 short flag: cites verify" yes \
+  "$(mentions "$(reason $H "$(bash_json 'git commit -nm x')")" 'AGENTS\.md § 11')"
+expect "V-5 plain commit: ask" ask "$(decision $H "$(bash_json 'git commit -m x')")"
+expect "V-5 plain commit: cites commit" yes \
+  "$(mentions "$(reason $H "$(bash_json 'git commit -m x')")" 'AGENTS\.md § 13')"
+expect "V-5 plain commit: does not cite verify" no \
+  "$(mentions "$(reason $H "$(bash_json 'git commit -m x')")" 'AGENTS\.md § 11')"
+mv "$SANDBOX.saved" "$S/.claude/fastapi-harness.json"
+
 # The plain project: a FastAPI service without .claude/fastapi-harness.json.
 P="$PLAIN"
 export CLAUDE_PROJECT_DIR="$P"
@@ -463,6 +489,12 @@ expect "C-4 no project rule without configuration" allow "$(decision $H "$(bash_
 H=block-secret-reads.sh
 expect "C-8 .env without configuration" deny "$(decision $H "$(read_json "$P/.env")")"
 expect "C-8 no rule reference" no "$(mentions "$(reason $H "$(read_json "$P/.env")")" 'AGENTS')"
+
+H=block-dangerous-bash.sh
+expect "V-4 without rule_refs: deny" deny "$(decision $H "$(bash_json 'git commit -m x --no-verify')")"
+expect "V-4 without rule_refs: no reference" no \
+  "$(mentions "$(reason $H "$(bash_json 'git commit -m x --no-verify')")" '\([^)]*\)$|\([^)]*\)\.')"
+H=block-secret-reads.sh
 
 mkdir -p "$P/.claude"
 printf '{"tests": ' > "$P/.claude/fastapi-harness.json"
