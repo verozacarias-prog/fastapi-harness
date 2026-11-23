@@ -511,6 +511,30 @@ expect "R-14 file written by a heredoc, then run" deny \
 expect "R-15 cat heredoc that is not a commit message" deny \
   "$(r "bash -c \"\$(cat <<'EOF'${NL}cat .env${NL}EOF${NL})\"")"
 
+# ── Commands built to make text look inert (issue #5, cases T-1 to T-9) ──────
+
+Q1="'"
+expect "T-1 -m of another command after git log" deny \
+  "$(r "git log --grep commit; bash -cm \"\$(cat <<'EOF'${NL}rm -rf ~${NL}EOF${NL})\"")"
+expect "T-2 -m of eval after git log"  deny "$(r 'git log commit; eval true -m "; rm -rf ~"')"
+expect "T-3 -m of bash -c after git log" deny "$(r 'git log commit; bash -cm "cat .env"')"
+expect "T-4 commit heredoc inside an open quote" deny \
+  "$(r "echo ${Q1} git commit -m \"\$(cat <<'EOF'${NL}${Q1}; rm -rf ~; #${NL}EOF")"
+expect "T-5 file heredoc inside a shell heredoc" deny \
+  "$(r "bash <<'X'${NL}cat > f <<'EOF'${NL}X${NL}rm -rf ~${NL}EOF")"
+expect "T-6 commit heredoc closed by EOF)" deny \
+  "$(r "git commit -m \"\$(cat <<'EOF'${NL}msg${NL}EOF)\"; rm -rf ~${NL}EOF")"
+expect "T-7 heredoc written to a git hook" deny \
+  "$(r "cat > .git/hooks/pre-commit <<'EOF'${NL}rm -rf ~${NL}EOF")"
+BIG=$(head -c 40000 < /dev/zero | tr '\0' 'a')
+T8_START=$SECONDS
+T8=$(r "echo ${BIG}${NL}git push --force")
+T8_TIME=$(( SECONDS - T8_START ))
+expect "T-8 long command: deny" deny "$T8"
+expect "T-8 long command: under 10 seconds" yes "$([[ $T8_TIME -lt 10 ]] && echo yes || echo no)"
+expect "T-9 grep and a message that names a secret" ask \
+  "$(r 'grep -n x README.md && git commit -m "no leer .env"')"
+
 # ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
 
 H=protect-tests-and-specs.sh
