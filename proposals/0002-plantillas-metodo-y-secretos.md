@@ -1,7 +1,6 @@
 # 0002 — Las plantillas de una funcionalidad, el método escrito y los secretos
 
-- **Estado:** borrador. Las tres decisiones, elegidas el 23/11/2026; los casos, pendientes de
-  aprobación.
+- **Estado:** aprobada x Veronica Zacarias el 23/11/2026, con las tres decisiones recomendadas.
 - **Fecha:** 2026-11-23
 - **Base:** `docs/features/TEMPLATE/`, `AGENTS.md` § 13, `docs/convenciones-de-desarrollo.md`
   y el `permissions.deny` de `.claude/settings.json` de `AI4Devs-finalproject` en `platita-v2`.
