@@ -58,6 +58,14 @@ edit_json() {
 write_json() {
   jq -n --arg p "$1" --arg c "$2" '{tool_name: "Write", tool_input: {file_path: $p, content: $c}}'
 }
+# grep_json [path] → a Grep call, with that path or without one.
+grep_json() {
+  if [[ $# -gt 0 ]]; then
+    jq -n --arg p "$1" '{tool_name: "Grep", tool_input: {pattern: "KEY", path: $p}}'
+  else
+    jq -n '{tool_name: "Grep", tool_input: {pattern: "KEY"}}'
+  fi
+}
 bash_json() { jq -n --arg c "$1" '{tool_name: "Bash", tool_input: {command: $c}}'; }
 stop_json() { jq -n --argjson a "${1:-false}" '{hook_event_name: "Stop", stop_hook_active: $a}'; }
 
@@ -125,6 +133,14 @@ expect "H1-2 .env.example"     allow "$(decision $H "$(read_json "$S/.env.exampl
 expect "H1-3 constants.py"     allow "$(decision $H "$(read_json "$S/backend/app/constants.py")")"
 expect "H1-4 e2e compose.env"  allow "$(decision $H "$(read_json "$S/frontend/e2e/compose.env")")"
 expect "H1-5 other compose.env" deny "$(decision $H "$(read_json "$S/otra/carpeta/compose.env")")"
+
+# Grep shows the content of what it searches (proposal 0002, cases S-1 to S-6).
+expect "S-1 Grep .env"                 deny  "$(decision $H "$(grep_json '.env')")"
+expect "S-2 Grep config/.env.local"    deny  "$(decision $H "$(grep_json 'config/.env.local')")"
+expect "S-3 Grep .env.example"         allow "$(decision $H "$(grep_json '.env.example')")"
+expect "S-4 Grep app/"                 allow "$(decision $H "$(grep_json 'app/')")"
+expect "S-5 Grep without a path"       allow "$(decision $H "$(grep_json)")"
+expect "S-6 Grep allowed compose.env"  allow "$(decision $H "$(grep_json 'frontend/e2e/compose.env')")"
 
 # ── Hook 2: protect-tests-and-specs.sh ───────────────────────────────────────
 

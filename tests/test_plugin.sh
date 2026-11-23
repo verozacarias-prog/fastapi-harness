@@ -59,7 +59,7 @@ for hook in block-secret-reads.sh protect-tests-and-specs.sh block-dangerous-bas
     "$(grep -qF "\${CLAUDE_PLUGIN_ROOT}/hooks/$hook" "$REGISTRY" 2>/dev/null && echo yes || echo no)"
   expect "P-3 $hook exists" yes "$([[ -f "$ROOT/hooks/$hook" ]] && echo yes || echo no)"
 done
-expect "P-3 Read matcher" yes "$(json_yes "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Read") != null')"
+expect "P-3 Read|Grep matcher" yes "$(json_yes "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Read|Grep") != null')"
 expect "P-3 Bash matcher" yes "$(json_yes "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Bash") != null')"
 expect "P-3 Edit matcher" yes "$(json_yes "$REGISTRY" '[.hooks.PreToolUse[]?.matcher] | index("Edit|MultiEdit|Write") != null')"
 expect "P-3 Stop hook" yes "$(json_yes "$REGISTRY" '(.hooks.Stop | length) > 0')"
@@ -94,6 +94,78 @@ if [[ -f "$AGENT" ]]; then
   expect "P-6 pr-reviewer reads the project notes" yes "$(grep -q 'notes_dir' "$AGENT" && echo yes || echo no)"
 fi
 
+# ── Templates of a feature (proposal 0002) ───────────────────────────────────
+
+TEMPLATES="$ROOT/templates/feature"
+MARKER=$(json "$DEFAULTS" .specs.approval_marker)
+PENDING=$(json "$DEFAULTS" .specs.pending_value)
+SPEC_TEMPLATE="$TEMPLATES/spec.md"
+
+expect "P-9 spec.md template exists" yes "$([[ -f "$SPEC_TEMPLATE" ]] && echo yes || echo no)"
+expect "P-9 one pending approval line per cut" 3 \
+  "$(grep -cF -- "$MARKER $PENDING" "$SPEC_TEMPLATE" 2>/dev/null || true)"
+
+# P-10 and P-11: the template, copied into a throwaway project, works with the hook
+# and its default configuration.
+PROJECT=$(mktemp -d)
+trap 'rm -rf "$PROJECT"' EXIT
+APPROVED="$MARKER Ana, 2026-11-23"
+approve_json() {
+  jq -n --arg p "$1" --arg o "$MARKER $PENDING" --arg n "$APPROVED" \
+    '{tool_name: "Edit", tool_input: {file_path: $p, old_string: $o, new_string: $n}}'
+}
+hook_decision() {
+  local out d
+  out=$(printf '%s' "$1" | CLAUDE_PROJECT_DIR="$PROJECT" bash "$ROOT/hooks/protect-tests-and-specs.sh" 2>/dev/null)
+  d=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // .decision // empty' 2>/dev/null)
+  echo "${d:-allow}"
+}
+TEMPLATE_DIR=$(json "$DEFAULTS" .specs.template_dir)
+mkdir -p "$PROJECT/${TEMPLATE_DIR%/}" "$PROJECT/docs/features/FEAT-1"
+if [[ -f "$SPEC_TEMPLATE" ]]; then
+  cp "$SPEC_TEMPLATE" "$PROJECT/${TEMPLATE_DIR%/}/spec.md"
+  cp "$SPEC_TEMPLATE" "$PROJECT/docs/features/FEAT-1/spec.md"
+  git -C "$PROJECT" init -q
+  git -C "$PROJECT" -c user.name=test -c user.email=test@example.invalid add -A
+  git -C "$PROJECT" -c user.name=test -c user.email=test@example.invalid commit -q -m init
+  expect "P-10 approve in the project template" allow \
+    "$(hook_decision "$(approve_json "$PROJECT/${TEMPLATE_DIR%/}/spec.md")")"
+  expect "P-11 approve in a feature spec" deny \
+    "$(hook_decision "$(approve_json "$PROJECT/docs/features/FEAT-1/spec.md")")"
+else
+  expect "P-10 approve in the project template" allow "missing template"
+  expect "P-11 approve in a feature spec" deny "missing template"
+fi
+
+expect "P-12 pr.md template exists" yes "$([[ -f "$TEMPLATES/pr.md" ]] && echo yes || echo no)"
+expect "P-12 ui_contract.md template exists" yes "$([[ -f "$TEMPLATES/ui_contract.md" ]] && echo yes || echo no)"
+for state in 'Cargando' 'Con contenido' 'Vacío' 'Error'; do
+  expect "P-12 ui_contract.md has the state $state" yes \
+    "$(grep -qF "| $state |" "$TEMPLATES/ui_contract.md" 2>/dev/null && echo yes || echo no)"
+done
+
+# ── What the project has to have written (proposal 0002) ─────────────────────
+
+expect "P-13 README section" yes \
+  "$(grep -qE '^#+ Lo que el proyecto tiene que tener escrito' "$ROOT/README.md" && echo yes || echo no)"
+expect "P-13 no copy of the method" "" \
+  "$(cd "$ROOT" && ls metodo.md templates/agents-section.md 2>/dev/null)"
+
+# ── Secrets (proposal 0002) ──────────────────────────────────────────────────
+
+DENY="$ROOT/templates/settings-deny.json"
+expect "P-14 settings-deny.json is valid" yes "$(valid_json "$DENY")"
+for name in '.env' 'credentials*' 'id_rsa' 'id_ed25519' '*.pem' '*.key' 'service-account*.json'; do
+  expect "P-14 deny covers $name" yes \
+    "$(json_yes "$DENY" "[.permissions.deny[]?] | index(\"Read(**/$name)\") != null")"
+done
+
+TICKET="$ROOT/commands/ticket.md"
+expect "P-15 /ticket names specs.template_dir" yes \
+  "$(grep -qF 'specs.template_dir' "$TICKET" && echo yes || echo no)"
+expect "P-15 /ticket offers the plugin template" yes \
+  "$(grep -qF '${CLAUDE_PLUGIN_ROOT}/templates/feature' "$TICKET" && echo yes || echo no)"
+
 # ── Nothing of one project or one person ─────────────────────────────────────
 # proposals/ is the record and keeps where each piece came from. The author is
 # named only where authorship is declared: LICENSE and the author of plugin.json.
@@ -103,6 +175,7 @@ LEAKS=$(grep -rIilE "$LEAKS_PATTERN" "$ROOT" \
   --exclude-dir=.git --exclude-dir=proposals --exclude=test_plugin.sh \
   --exclude=LICENSE --exclude=plugin.json 2>/dev/null | sed "s|$ROOT/||")
 expect "P-7 no project or personal names" "" "$LEAKS"
+expect "P-7 templates/ is there to be checked" yes "$([[ -d "$ROOT/templates" ]] && echo yes || echo no)"
 expect "P-7 plugin.json names a person only as its author" no \
   "$(jq 'del(.author)' "$PLUGIN" 2>/dev/null | grep -qiE "$LEAKS_PATTERN" && echo yes || echo no)"
 
