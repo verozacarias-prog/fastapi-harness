@@ -92,7 +92,7 @@ fi
 
 # 4. Skipping the pre-commit hook, and merging.
 if git_matches "${S}git[[:space:]]+commit([[:space:]].*)?[[:space:]](--no-verify([[:space:]]|$)|-[a-ln-zA-Z]*n)"; then
-  deny "git commit --no-verify saltea el hook de pre-commit y sus controles. Saltearlo lo decide una persona, a mano$(ref commit)."
+  deny "git commit --no-verify saltea el hook de pre-commit y sus controles. Saltearlo lo decide una persona, a mano$(ref verify commit)."
 fi
 if matches "${S}gh[[:space:]]+pr[[:space:]]+merge" || matches "${S}gh[[:space:]]+api[[:space:]].*/merge([^[:alnum:]_-]|$)"; then
   deny "Un asistente nunca hace merge: la aprobación final de un pull request es de una persona$(ref commit)."

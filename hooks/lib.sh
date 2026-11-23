@@ -43,11 +43,17 @@ cfg_list() {
   printf '%s' "$CONFIG" | jq -r "($1 // [])[]" 2>/dev/null
 }
 
-# ref <rule> → " (where the project writes that rule)", or nothing.
+# ref <rule> [fallback…] → " (where the project writes that rule)", or nothing.
+# The first rule the project configures wins.
 ref() {
-  local where
-  where=$(cfg ".rule_refs[\"$1\"]")
-  [[ -n "$where" ]] && printf ' (%s)' "$where"
+  local rule where
+  for rule in "$@"; do
+    where=$(cfg ".rule_refs[\"$rule\"]")
+    if [[ -n "$where" ]]; then
+      printf ' (%s)' "$where"
+      return 0
+    fi
+  done
   return 0
 }
 
