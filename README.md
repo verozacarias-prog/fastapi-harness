@@ -114,7 +114,7 @@ que usar, dónde se guarda la descripción de un pull request o qué invariantes
   - en inglés: las carpetas, los nombres de los archivos de código y de configuración, las
     claves de la configuración, los nombres de los comandos y del agente, el código, los
     comentarios y los nombres de los casos de test;
-  - en español: los nombres de los documentos (como `proposals/0002-verificador-de-arquitectura.md`),
+  - en español: los nombres de los documentos (como `proposals/0002-plantillas-metodo-y-secretos.md`),
     el README, las propuestas, el texto de los comandos y del agente, los mensajes de los hooks
     y los commits.
 
