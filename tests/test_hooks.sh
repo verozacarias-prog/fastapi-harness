@@ -452,6 +452,43 @@ expect "V-5 plain commit: does not cite verify" no \
   "$(mentions "$(reason $H "$(bash_json 'git commit -m x')")" 'AGENTS\.md § 11')"
 mv "$SANDBOX.saved" "$S/.claude/fastapi-harness.json"
 
+# ── Text that only names a secret or a flag (issue #5, cases B-1 to B-9) ─────
+
+H=block-dangerous-bash.sh
+NL=$'\n'
+expect "B-1 cat .env"                      deny "$(decision $H "$(bash_json 'cat .env')")"
+expect "B-2 grep in config/.env.local"     deny "$(decision $H "$(bash_json 'grep KEY config/.env.local')")"
+expect "B-3 cat quoted .env"               deny "$(decision $H "$(bash_json 'cat ".env"')")"
+expect "B-4 cat .env with a heredoc"       deny \
+  "$(decision $H "$(bash_json "cat .env <<'EOF'${NL}x${NL}EOF")")"
+expect "B-5 python heredoc naming .env"    allow \
+  "$(decision $H "$(bash_json "python3 - <<'EOF'${NL}print('.env')${NL}EOF")")"
+expect "B-6 cat > file, body names .env"   allow \
+  "$(decision $H "$(bash_json "cat > notas.md <<'EOF'${NL}no leer .env${NL}EOF")")"
+expect "B-7 commit message names cat .env" ask \
+  "$(decision $H "$(bash_json 'git commit -m "menciona cat .env"')")"
+expect "B-8 multiline message names the flag" ask \
+  "$(decision $H "$(bash_json "git commit -m \"título${NL}${NL}cuerpo que nombra --no-verify\"")")"
+expect "B-9 commit --no-verify"            deny "$(decision $H "$(bash_json 'git commit -m x --no-verify')")"
+expect "B-10 flag named in the first line of a multiline message" ask \
+  "$(decision $H "$(bash_json "git commit -m \"título que nombra --no-verify${NL}${NL}cuerpo\"")")"
+
+# ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
+
+H=protect-tests-and-specs.sh
+cp "$S/.claude/fastapi-harness.json" "$SANDBOX.saved"
+jq '.notes_dir = "docs/notas-ia/"' "$SANDBOX.saved" > "$S/.claude/fastapi-harness.json"
+mkdir -p "$S/docs/notas-ia" "$S/.claude/fastapi-harness"
+printf '# Notas\n' > "$S/docs/notas-ia/ticket.md"
+printf '# Notas\n' > "$S/.claude/fastapi-harness/ticket.md"
+expect "N-3 configured notes_dir" ask \
+  "$(decision $H "$(edit_json "$S/docs/notas-ia/ticket.md" '# Notas' '# Otras notas')")"
+expect "N-4 default folder when notes_dir is elsewhere" allow \
+  "$(decision $H "$(edit_json "$S/.claude/fastapi-harness/ticket.md" '# Notas' '# Otras notas')")"
+rm -f "$S/docs/notas-ia/ticket.md" "$S/.claude/fastapi-harness/ticket.md"
+rmdir "$S/docs/notas-ia" "$S/.claude/fastapi-harness"
+mv "$SANDBOX.saved" "$S/.claude/fastapi-harness.json"
+
 # The plain project: a FastAPI service without .claude/fastapi-harness.json.
 P="$PLAIN"
 export CLAUDE_PROJECT_DIR="$P"
@@ -494,6 +531,19 @@ H=block-dangerous-bash.sh
 expect "V-4 without rule_refs: deny" deny "$(decision $H "$(bash_json 'git commit -m x --no-verify')")"
 expect "V-4 without rule_refs: no reference" no \
   "$(mentions "$(reason $H "$(bash_json 'git commit -m x --no-verify')")" '\([^)]*\)$|\([^)]*\)\.')"
+
+H=protect-tests-and-specs.sh
+mkdir -p "$P/.claude/fastapi-harness" "$P/docs"
+printf '# Notas\n' > "$P/.claude/fastapi-harness/ticket.md"
+printf '# Otra\n' > "$P/docs/otra.md"
+expect "N-1 edit a note, default notes_dir" ask \
+  "$(decision $H "$(edit_json "$P/.claude/fastapi-harness/ticket.md" '# Notas' '# Otras notas')")"
+expect "N-2 create a note" ask \
+  "$(decision $H "$(write_json "$P/.claude/fastapi-harness/nueva.md" '# Nueva')")"
+expect "N-5 edit another document" allow \
+  "$(decision $H "$(edit_json "$P/docs/otra.md" '# Otra' '# Otra cosa')")"
+rm -f "$P/.claude/fastapi-harness/ticket.md" "$P/docs/otra.md"
+rmdir "$P/.claude/fastapi-harness" "$P/docs"
 H=block-secret-reads.sh
 
 mkdir -p "$P/.claude"
