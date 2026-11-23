@@ -21,7 +21,8 @@ y lleva solo sus issues.
 
 Cada **pausa** es un punto en el que te detenés y esperás a la persona. No la saltes aunque el
 paso siguiente parezca obvio, y no tomes un "dale" de una pausa como permiso para la siguiente.
-Ningún commit ni push se hace sin que la persona lo pida, sea del tipo que sea, y ninguna
+El commit de cada paso lo hacés vos cuando el paso está listo: queda en la máquina y se
+deshace fácil. Ningún push se hace sin que la persona lo pida, porque publica, y ninguna
 revisión se lanza sin que la pida: una verificación se corre cuando la persona decide.
 
 Las dudas se preguntan de a una, con una escena concreta de uso y no con el nombre técnico, y
@@ -61,7 +62,9 @@ Escribí los tests tal como se aprobaron, sin sumar ni cambiar casos, y corrélo
 fallan y por qué, y cuáles ya pasan y por qué: un test que pasa antes de implementar se dice, no
 se esconde.
 
-**Pausa.** El commit `test(alcance): …`, solo si la persona lo pide.
+Hacé el commit `test(alcance): …` con los tests en rojo.
+
+**Pausa.** Mostrá el rojo; con el ok de la persona, seguí con la implementación.
 
 ## 5. Implementar
 
@@ -72,8 +75,7 @@ regla, un caso o un comportamiento, buscá con `grep` en la especificación, el 
 `README.md` todo lo que lo menciona, y actualizalo también: una decisión se propaga en el mismo
 pull request, no después.
 
-**Pausa.** El commit `feat(alcance): …`, y los `docs(alcance): …` de la documentación, solo si
-la persona los pide.
+Hacé el commit `feat(alcance): …`, y los `docs(alcance): …` de la documentación.
 
 ## 6. Cerrar el corte
 
@@ -89,7 +91,8 @@ desbloqueó en la hoja de ruta del proyecto, si tiene una.
 Dale los pasos exactos para verlo andar como lo usaría una persona: cómo se levanta, los datos
 de prueba y qué mirar. Decí también qué no se puede probar a mano y qué test lo cubre.
 
-**Pausa.** La persona prueba. Lo que surja se corrige en la misma rama. Si pide un test nuevo
+**Pausa.** La persona prueba. Lo que surja se corrige en la misma rama, cada corrección con su
+commit. Si pide un test nuevo
 o cambiar uno, es un caso nuevo: vuelve al paso 3, se propone, se aprueba y recién ahí se
 escribe.
 
@@ -97,7 +100,8 @@ escribe.
 
 **Pausa.** Preguntá si corrés el agente `fastapi-harness:pr-reviewer` sobre la rama. Resumí su
 veredicto con los hallazgos por gravedad y resolvé con la persona qué se corrige ahora y qué
-queda anotado. Una corrección que pide un test nuevo vuelve al paso 3, como en el paso 7.
+queda anotado. Cada corrección va con su commit, y una que pide un test nuevo vuelve al paso 3,
+como en el paso 7.
 
 ## 9. Entregar
 

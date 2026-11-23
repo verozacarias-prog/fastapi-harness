@@ -17,7 +17,7 @@ Claude Code los corre solo, antes de cada acción o al cerrar un turno.
 |---|---|---|
 | `block-secret-reads.sh` | Antes de leer o de buscar con Grep | Rechaza `.env` y sus variantes, claves (`*.pem`, `*.key`, `id_rsa`), credenciales y `service-account*.json`. Deja leer `.env.example` y lo que el proyecto declare en `secrets_allowed`. En un Grep mira solo la ruta que se le pasa: una búsqueda sobre una carpeta queda, en lo posible, para el `permissions.deny` del proyecto ([abajo](#los-secretos-dos-controles-a-propósito)) |
 | `protect-tests-and-specs.sh` | Antes de editar o escribir | Rechaza editar archivos de entorno y completar la línea de aprobación de una `spec.md`. Pregunta antes de cambiar, borrar o deshabilitar algo de un test existente, editar una migración ya versionada, tocar los hooks y su configuración, o cambiar una nota del proyecto (`notes_dir`) |
-| `block-dangerous-bash.sh` | Antes de un comando | Rechaza el borrado recursivo, leer secretos por la terminal, el push forzado, reescribir la historia, `--no-verify`, el merge y operar contra `production`. Pregunta antes de borrar o reescribir un test, descartar trabajo local, hacer commit o push, e instalar una dependencia. Suma las reglas propias del proyecto |
+| `block-dangerous-bash.sh` | Antes de un comando | Rechaza el borrado recursivo, leer secretos por la terminal, el push forzado, reescribir la historia, `--no-verify`, el merge y operar contra `production`. Pregunta antes de borrar o reescribir un test, descartar trabajo local, hacer push (salvo `--dry-run`) e instalar una dependencia. El commit queda libre: no sale de la máquina. Suma las reglas propias del proyecto |
 | `verify-tests-on-stop.sh` | Al cerrar el turno | Corre las suites que tienen cambios sin commitear y no deja cerrar el turno con una en rojo. Si lo único que cambió son tests, es la fase en rojo y deja pasar |
 
 Para explorar en local con la suite en rojo, `HARNESS_ALLOW_RED=1` en el `env` de
@@ -41,7 +41,7 @@ Para explorar en local con la suite en rojo, `HARNESS_ALLOW_RED=1` en el `env` d
    {
      "extraKnownMarketplaces": {
        "fastapi-harness": {
-         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.3.0" }
+         "source": { "source": "github", "repo": "<owner>/fastapi-harness", "ref": "v0.4.0" }
        }
      },
      "enabledPlugins": { "fastapi-harness@fastapi-harness": true }
@@ -84,7 +84,7 @@ entera:
 | Los casos de un corte los aprueba una persona antes de que se escriba un test, y el asistente no completa la línea de aprobación | `/ticket` (pasos 3 y 4) y `protect-tests-and-specs.sh`, que solo controla la línea |
 | Los tests se escriben tal como se aprobaron, se corren y se commitean en rojo antes de implementar | `/ticket` (paso 4) y `verify-tests-on-stop.sh`, que deja cerrar el turno en rojo solo si lo único que cambió son tests |
 | Un test no se modifica, deshabilita ni borra para que la suite pase | `protect-tests-and-specs.sh` y `block-dangerous-bash.sh`, que preguntan pero no deciden |
-| El asistente hace commit solo cuando se lo piden, y nunca merge | `/ticket`, `block-dangerous-bash.sh` (pregunta el commit, rechaza el merge) |
+| El asistente hace push solo cuando se lo piden, y nunca merge | `/ticket`, `block-dangerous-bash.sh` (pregunta el push, rechaza el merge) |
 
 Si una regla del proyecto y el plugin se contradicen, manda la del proyecto: se ajustan sus
 notas o se propone el cambio acá.
@@ -155,7 +155,7 @@ Comprobado el 23/11/2026 con Claude Code 2.1.330. En cada clon, con la versión 
 
 ```sh
 claude plugin marketplace remove fastapi-harness
-claude plugin marketplace add "https://github.com/<owner>/fastapi-harness.git#v0.3.0"
+claude plugin marketplace add "https://github.com/<owner>/fastapi-harness.git#v0.4.0"
 claude plugin install fastapi-harness@fastapi-harness --scope project
 git restore .claude/settings.json
 ```
@@ -185,7 +185,7 @@ valores por defecto y lo avisan.
 | `suites` | Las suites del hook de cierre: qué rutas mira (`watch`), qué archivos son tests (`tests_pattern`), desde qué carpeta corre (`cwd`), el ejecutable (`runner`), sus argumentos y qué decir si falta |
 | `bash_rules` | Las reglas propias del proyecto, en `deny` y en `ask`, cada una con su `pattern` (expresión regular extendida) y su `message` |
 | `dependency_hint` | Lo que se suma al aviso de una dependencia nueva, como el script de lockfile del proyecto |
-| `rule_refs` | Dónde escribe el proyecto cada regla (`secrets`, `tests`, `approval`, `migrations`, `commit`, `verify`, `dependencies`), para citarlo en el mensaje del hook. `verify` es la de los controles que corren antes de un commit, y la cita el rechazo de `--no-verify`; sin ella, ese rechazo cita `commit` |
+| `rule_refs` | Dónde escribe el proyecto cada regla (`secrets`, `tests`, `approval`, `migrations`, `commit`, `verify`, `dependencies`), para citarlo en el mensaje del hook. `commit` es la de quién hace push y merge: el nombre viene de cuando el commit también preguntaba. `verify` es la de los controles que corren antes de un commit, y la cita el rechazo de `--no-verify`; sin ella, ese rechazo cita `commit` |
 | `notes_dir` | La carpeta de las notas del proyecto para los comandos y el agente |
 
 Un ejemplo completo, con un backend y un dashboard, está en
