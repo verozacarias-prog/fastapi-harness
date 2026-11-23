@@ -151,12 +151,14 @@ expect "P-13 README section" yes \
 expect "P-13 no metodo.md nor templates/agents-section.md" "" \
   "$(cd "$ROOT" && ls metodo.md templates/agents-section.md 2>/dev/null)"
 
-# ── The reference of the --no-verify rejection (issue #1) ────────────────────
+# ── Taking a new version (issue #4) ──────────────────────────────────────────
 
 expect "P-17 README: re-add the marketplace at the new tag" yes \
   "$(grep -qE 'claude plugin marketplace add .*#v' "$ROOT/README.md" && echo yes || echo no)"
 expect "P-17 README: restore settings.json after installing" yes \
   "$(grep -qF 'git restore .claude/settings.json' "$ROOT/README.md" && echo yes || echo no)"
+
+# ── The reference of the --no-verify rejection (issue #1) ────────────────────
 
 expect "P-16 README names rule_refs.verify" yes \
   "$(grep -E '^\| `rule_refs` \|' "$ROOT/README.md" | grep -qF '`verify`' && echo yes || echo no)"

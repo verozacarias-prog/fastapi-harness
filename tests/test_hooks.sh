@@ -452,7 +452,7 @@ expect "V-5 plain commit: does not cite verify" no \
   "$(mentions "$(reason $H "$(bash_json 'git commit -m x')")" 'AGENTS\.md § 11')"
 mv "$SANDBOX.saved" "$S/.claude/fastapi-harness.json"
 
-# ── Text that only names a secret or a flag (issue #5, cases B-1 to B-9) ─────
+# ── Text that only names a secret or a flag (issue #5, cases B-1 to B-17) ────
 
 H=block-dangerous-bash.sh
 NL=$'\n'
@@ -472,6 +472,20 @@ expect "B-8 multiline message names the flag" ask \
 expect "B-9 commit --no-verify"            deny "$(decision $H "$(bash_json 'git commit -m x --no-verify')")"
 expect "B-10 flag named in the first line of a multiline message" ask \
   "$(decision $H "$(bash_json "git commit -m \"título que nombra --no-verify${NL}${NL}cuerpo\"")")"
+expect "B-11 read inside quoted command substitution" deny \
+  "$(decision $H "$(bash_json 'echo "$(cat .env)"')")"
+expect "B-12 unquoted heredoc body is expanded" deny \
+  "$(decision $H "$(bash_json "cat <<EOF${NL}\$(cat .env)${NL}EOF")")"
+expect "B-13 heredoc to a shell" deny \
+  "$(decision $H "$(bash_json "bash <<EOF${NL}cat .env${NL}EOF")")"
+expect "B-14 quoted heredoc to a shell" deny \
+  "$(decision $H "$(bash_json "bash <<'EOF'${NL}cat .env${NL}EOF")")"
+expect "B-15 heredoc marker inside quotes hides nothing" deny \
+  "$(decision $H "$(bash_json "git commit -m \"ver <<EOF\"${NL}git push --force${NL}EOF")")"
+expect "B-16 command after a heredoc with a dash in its delimiter" deny \
+  "$(decision $H "$(bash_json "cat <<'END-X'${NL}x${NL}END-X${NL}cat .env")")"
+expect "B-17 escaped quote does not pair across lines" deny \
+  "$(decision $H "$(bash_json "echo \"a \\\" b\"${NL}git push --force${NL}echo \"c\"")")"
 
 # ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
 
