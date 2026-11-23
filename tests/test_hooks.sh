@@ -319,7 +319,7 @@ expect "H4-1 rm -rf"              deny  "$(decision $H "$(bash_json 'rm -rf back
 expect "H4-2 git push --force"    deny  "$(decision $H "$(bash_json 'git push --force')")"
 expect "H4-2 git push -f"         deny  "$(decision $H "$(bash_json 'git push -f origin x')")"
 expect "H4-3 commit --no-verify"  deny  "$(decision $H "$(bash_json 'git commit -m "x" --no-verify')")"
-expect "H4-4 git commit"          ask   "$(decision $H "$(bash_json 'git commit -m "x"')")"
+expect "H4-4 git commit"          allow "$(decision $H "$(bash_json 'git commit -m "x"')")"
 expect "H4-5 gh pr merge"         deny  "$(decision $H "$(bash_json 'gh pr merge 215')")"
 expect "H4-6 evals --run"         ask   "$(decision $H "$(bash_json 'python -m evals.classification.run --run')")"
 expect "H4-6 evals without --run" allow "$(decision $H "$(bash_json 'python -m evals.classification.run')")"
@@ -333,7 +333,7 @@ expect "H4-10 cat id_rsa"         deny  "$(decision $H "$(bash_json 'cat ~/.ssh/
 expect "H4-11 cat a .pem"         deny  "$(decision $H "$(bash_json 'cat certs/server.pem')")"
 expect "H4-12 head credentials"   deny  "$(decision $H "$(bash_json 'head credentials.json')")"
 expect "H4-13 cat e2e compose.env" allow "$(decision $H "$(bash_json 'cat frontend/e2e/compose.env')")"
-expect "H4-14 -n inside the message" ask \
+expect "H4-14 -n inside the message" allow \
   "$(decision $H "$(bash_json 'git commit -m "docs: quitar el -n del ejemplo"')")"
 expect "H4-15 git commit -n"      deny  "$(decision $H "$(bash_json 'git commit -n -m "x"')")"
 expect "H4-16 rm -f one file"     allow "$(decision $H "$(bash_json 'rm -f build.log')")"
@@ -345,7 +345,7 @@ expect "H4-19 grep production"    allow "$(decision $H "$(bash_json 'grep -rn pr
 expect "H4-20 git -C commit -n"   deny  "$(decision $H "$(bash_json 'git -C . commit -n -m x')")"
 expect "H4-20 git -c commit --no-verify" deny \
   "$(decision $H "$(bash_json 'git -c core.hooksPath=/dev/null commit --no-verify -m x')")"
-expect "H4-21 git -C commit"      ask   "$(decision $H "$(bash_json 'git -C . commit -m x')")"
+expect "H4-21 git -C commit"      allow "$(decision $H "$(bash_json 'git -C . commit -m x')")"
 expect "H4-21 git -C push"        ask   "$(decision $H "$(bash_json 'git -C /ruta/al/repo push')")"
 expect "H4-22 git -C push --force" deny "$(decision $H "$(bash_json 'git -C . push --force origin x')")"
 expect "H4-22 --force-with-lease" deny  "$(decision $H "$(bash_json 'git push --force-with-lease')")"
@@ -360,7 +360,7 @@ expect "H4-27 git push -fu"       deny  "$(decision $H "$(bash_json 'git push -f
 expect "H4-27 git push -uf"       deny  "$(decision $H "$(bash_json 'git push -uf origin x')")"
 expect "H4-28 git commit -nm"     deny  "$(decision $H "$(bash_json 'git commit -nm wip')")"
 expect "H4-28 git commit -anm"    deny  "$(decision $H "$(bash_json 'git commit -anm wip')")"
-expect "H4-28 git commit -am"     ask   "$(decision $H "$(bash_json 'git commit -am "x"')")"
+expect "H4-28 git commit -am"     allow "$(decision $H "$(bash_json 'git commit -am "x"')")"
 expect "H4-29 checkout && pytest tests" allow \
   "$(decision $H "$(bash_json 'git checkout main && pytest backend/tests/unit -q')")"
 expect "H4-29 mv && pytest tests" allow \
@@ -445,11 +445,11 @@ expect "V-1 with verify: does not cite commit" no \
 expect "V-2 short flag: deny" deny "$(decision $H "$(bash_json 'git commit -nm x')")"
 expect "V-2 short flag: cites verify" yes \
   "$(mentions "$(reason $H "$(bash_json 'git commit -nm x')")" 'AGENTS\.md § 11')"
-expect "V-5 plain commit: ask" ask "$(decision $H "$(bash_json 'git commit -m x')")"
-expect "V-5 plain commit: cites commit" yes \
-  "$(mentions "$(reason $H "$(bash_json 'git commit -m x')")" 'AGENTS\.md § 13')"
-expect "V-5 plain commit: does not cite verify" no \
-  "$(mentions "$(reason $H "$(bash_json 'git commit -m x')")" 'AGENTS\.md § 11')"
+expect "V-5 plain push: ask" ask "$(decision $H "$(bash_json 'git push origin x')")"
+expect "V-5 plain push: cites commit" yes \
+  "$(mentions "$(reason $H "$(bash_json 'git push origin x')")" 'AGENTS\.md § 13')"
+expect "V-5 plain push: does not cite verify" no \
+  "$(mentions "$(reason $H "$(bash_json 'git push origin x')")" 'AGENTS\.md § 11')"
 mv "$SANDBOX.saved" "$S/.claude/fastapi-harness.json"
 
 # ── Text that only names a secret or a flag (issue #5, cases B-1 to B-17) ────
@@ -465,12 +465,12 @@ expect "B-5 python heredoc naming .env"    allow \
   "$(decision $H "$(bash_json "python3 - <<'EOF'${NL}print('.env')${NL}EOF")")"
 expect "B-6 cat > file, body names .env"   allow \
   "$(decision $H "$(bash_json "cat > notas.md <<'EOF'${NL}no leer .env${NL}EOF")")"
-expect "B-7 commit message names cat .env" ask \
+expect "B-7 commit message names cat .env" allow \
   "$(decision $H "$(bash_json 'git commit -m "menciona cat .env"')")"
-expect "B-8 multiline message names the flag" ask \
+expect "B-8 multiline message names the flag" allow \
   "$(decision $H "$(bash_json "git commit -m \"título${NL}${NL}cuerpo que nombra --no-verify\"")")"
 expect "B-9 commit --no-verify"            deny "$(decision $H "$(bash_json 'git commit -m x --no-verify')")"
-expect "B-10 flag named in the first line of a multiline message" ask \
+expect "B-10 flag named in the first line of a multiline message" allow \
   "$(decision $H "$(bash_json "git commit -m \"título que nombra --no-verify${NL}${NL}cuerpo\"")")"
 expect "B-11 read inside quoted command substitution" deny \
   "$(decision $H "$(bash_json 'echo "$(cat .env)"')")"
@@ -490,7 +490,7 @@ expect "B-17 escaped quote does not pair across lines" deny \
 # ── What only text can be, and what still runs (issue #5, cases R-1 to R-15) ──
 
 r() { decision $H "$(bash_json "$1")"; }
-expect "R-1 commit message from a quoted cat heredoc" ask \
+expect "R-1 commit message from a quoted cat heredoc" allow \
   "$(r "git commit -m \"\$(cat <<'EOF'${NL}no leer .env, sin --no-verify${NL}EOF${NL})\"")"
 expect "R-2 non-ASCII before a read"           deny "$(r 'echo café; cat .env')"
 expect "R-3 non-ASCII before a force push"     deny "$(r 'echo listo ✓ && git push --force')"
@@ -532,12 +532,19 @@ T8=$(r "echo ${BIG}${NL}git push --force")
 T8_TIME=$(( SECONDS - T8_START ))
 expect "T-8 long command: deny" deny "$T8"
 expect "T-8 long command: under 10 seconds" yes "$([[ $T8_TIME -lt 10 ]] && echo yes || echo no)"
-expect "T-9 grep and a message that names a secret" ask \
+expect "T-9 grep and a message that names a secret" allow \
   "$(r 'grep -n x README.md && git commit -m "no leer .env"')"
 expect "T-10 unpaired ) in a commit heredoc body" deny \
   "$(r "git commit -m \"\$(cat <<'EOF'${NL}a) el paso \`rm -rf build\` ya no corre${NL}EOF${NL})\"")"
 expect "T-11 commit -e before the message" deny "$(r 'git commit -e -m "cd /tmp; rm -rf x"')"
 expect "T-12 commit --edit after the message" deny "$(r 'git commit -m "cd /tmp; rm -rf x" --edit')"
+
+# ── A commit runs freely; a push asks, and --dry-run is only its own flag (issue #7) ──
+
+expect "D-1 push --dry-run"                 allow "$(r 'git push --dry-run')"
+expect "D-2 --dry-run of another command"   ask   "$(r 'git push origin x; echo --dry-run')"
+expect "D-3 a dry run, then a real push"    ask   "$(r 'git push --dry-run origin x && git push origin x')"
+expect "D-4 commit and push"                ask   "$(r 'git commit -m x && git push origin x')"
 
 # ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
 
