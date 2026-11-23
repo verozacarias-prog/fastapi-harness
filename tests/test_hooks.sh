@@ -545,6 +545,9 @@ expect "D-1 push --dry-run"                 allow "$(r 'git push --dry-run')"
 expect "D-2 --dry-run of another command"   ask   "$(r 'git push origin x; echo --dry-run')"
 expect "D-3 a dry run, then a real push"    ask   "$(r 'git push --dry-run origin x && git push origin x')"
 expect "D-4 commit and push"                ask   "$(r 'git commit -m x && git push origin x')"
+expect "D-5 --dry-run in a comment"         ask   "$(r 'git push origin x # --dry-run')"
+expect "D-6 a real push inside a dry run"   ask   "$(r 'git push --dry-run $(git push origin x)')"
+expect "D-7 --dry-run as an option value"   ask   "$(r 'git push -o --dry-run origin x')"
 
 # ── The project notes (issue #2, cases N-3 and N-4; N-1, N-2 and N-5 below) ──
 
